@@ -1,128 +1,32 @@
-
-# coding: utf-8
-
-# In[1]:
-
-
-import time 
 import requests
-import cv2
-import operator
-import numpy as np
-from __future__ import print_function
-from picamera import PiCamera
 
-# Import library to display results
 import matplotlib.pyplot as plt
-get_ipython().run_line_magic('matplotlib', 'inline')
-# Display images within Jupyter
+from PIL import Image
+from io import BytesIO
 
+subscription_key = "01c8333210854059a6c2df093bf1b284"
+assert subscription_key
 
-# In[3]:
+vision_base_url = "https://westcentralus.api.cognitive.microsoft.com/vision/v2.0/"
 
+analyze_url = vision_base_url + "analyze"
+image_path = "D:/name.jpg"
+image_data = open(image_path, "rb").read()
+headers    = {'Ocp-Apim-Subscription-Key': subscription_key,
+              'Content-Type': 'application/octet-stream'}
+params     = {'visualFeatures': 'Categories,Description,Color'}
+response = requests.post(
+    analyze_url, headers=headers, params=params, data=image_data)
+response.raise_for_status()
+print(type(str(response)),str(response))
 
-_region = 'westcentralus' #Here you enter the region of your subscription
-_url = 'https://{}.api.cognitive.microsoft.com/vision/v1.0/analyze'.format(_region)
-_key = '01c8333210854059a6c2df093bf1b284'
-_maxNumRetries = 10
-
-
-# In[4]:
-
-
-def processRequest( json, data, headers, params ):
-
-    """
-    Helper function to process the request to Project Oxford
-
-    Parameters:
-    json: Used when processing images from its URL. See API Documentation
-    data: Used when processing image read from disk. See API Documentation
-    headers: Used to pass the key information and the data type request
-    """
-
-    retries = 0
-    result = None
-
-    while True:
-
-        response = requests.request( 'post', _url, json = json, data = data, headers = headers, params = params )
-
-        if response.status_code == 429: 
-
-            print( "Message: %s" % ( response.json() ) )
-
-            if retries <= _maxNumRetries: 
-                time.sleep(1) 
-                retries += 1
-                continue
-            else: 
-                print( 'Error: failed after retrying!' )
-                break
-
-        elif response.status_code == 200 or response.status_code == 201:
-
-            if 'content-length' in response.headers and int(response.headers['content-length']) == 0: 
-                result = None 
-            elif 'content-type' in response.headers and isinstance(response.headers['content-type'], str): 
-                if 'application/json' in response.headers['content-type'].lower(): 
-                    result = response.json() if response.content else None 
-                elif 'image' in response.headers['content-type'].lower(): 
-                    result = response.content
-        else:
-            print( "Error code: %d" % ( response.status_code ) )
-            print( "Message: %s" % ( response.json() ) )
-
-        break
-        
-    return result
-
-
-# In[5]:
-
-
-def renderResultOnImage( result, img ):
-    
-    """Display the obtained results onto the input image"""
-
-    R = int(result['color']['accentColor'][:2],16)
-    G = int(result['color']['accentColor'][2:4],16)
-    B = int(result['color']['accentColor'][4:],16)
-
-    cv2.rectangle( img,(0,0), (img.shape[1], img.shape[0]), color = (R,G,B), thickness = 25 )
-
-    if 'categories' in result:
-        categoryName = sorted(result['categories'], key=lambda x: x['score'])[0]['name']
-        cv2.putText( img, categoryName, (30,70), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,0,0), 3 )
-
-
-# In[ ]:
-
-
-camera = PiCamera()
-camera.capture('capture.jpg')
-image_path = 'capture.jpg'
-with open( image_path , 'rb' ) as f:
-    data = f.read()
-    
-# Computer Vision parameters
-params = { 'visualFeatures' : 'Color,Categories,Description'} 
-
-headers = dict()
-headers['Ocp-Apim-Subscription-Key'] = _key
-headers['Content-Type'] = 'application/octet-stream'
-
-json = None
-
-result = processRequest( json, data, headers, params )
-
-if result is not None:
-    # Load the original image, fetched from the URL
-    data8uint = np.fromstring( data, np.uint8 ) # Convert string to an unsigned int array
-    img = cv2.cvtColor( cv2.imdecode( data8uint, cv2.IMREAD_COLOR ), cv2.COLOR_BGR2RGB )
-
-    renderResultOnImage( result, img )
-
-    ig, ax = plt.subplots(figsize=(15, 20))
-    ax.imshow( img )
-
+# The 'analysis' object contains various fields that describe the image. The most
+# relevant caption for the image is obtained from the 'description' property.
+analysis = response.json()
+print('analysis',analysis)
+try:
+    image_caption = analysis["description"]["captions"][0]["text"].capitalize()
+except:
+    print('no caption found')
+    image_caption = 'No image caption'
+# Display the image and overlay it with the caption.
